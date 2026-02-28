@@ -7,6 +7,34 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <!-- EmailJS — sends email directly from browser, no server needed -->
+  <!-- Sign up free at https://emailjs.com to get your keys -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script>
+    // ── EMAILJS CONFIG ──
+    // 1. Go to https://emailjs.com → sign up free
+    // 2. Add Email Service (Gmail / Outlook / etc.) → copy Service ID
+    // 3. Create Email Template → paste the HTML template → copy Template ID
+    // 4. Go to Account → copy Public Key
+    // Then replace the three values below:
+    const EMAILJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';   // from Account tab
+    const EMAILJS_SERVICE_ID  = 'YOUR_SERVICE_ID';   // from Email Services tab
+    const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';  // from Email Templates tab
+
+    // Template variables available in your EmailJS template:
+    //   {{to_email}}   — user's email address
+    //   {{to_name}}    — user's first name
+    //   {{koin_score}} — their KOIN score (passed at send time)
+    //   {{currency}}   — their selected currency code
+    //   {{city}}       — their city
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
+        emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+        console.log('KOIN: EmailJS initialised');
+      }
+    });
+  </script>
 <style>
 :root{
   --ink:#08090f;--ink2:#0e1018;--ink3:#141720;--ink4:#1a1e2a;
@@ -1518,26 +1546,33 @@ function showInfo(k) {
 }
 
 // ── LAUNCH ──
-async function submitEmailToWeb3Forms(email, name) {
-  if (!email) return;
+async function sendWelcomeEmail(email, name) {
+  if (!email || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+    // EmailJS not configured — skip silently
+    console.log('KOIN: EmailJS not configured. Add your keys to send welcome emails.');
+    return;
+  }
   try {
-    // Web3Forms — free email service, no server needed.
-    // Replace ACCESS_KEY below with your key from https://web3forms.com
-    // Emails land directly in your inbox.
-    await fetch('https://api.web3forms.com/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        access_key: 'YOUR_WEB3FORMS_ACCESS_KEY', // ← replace this
-        subject: 'New KŌIN User: ' + name,
-        from_name: 'KŌIN App',
-        email: email,
-        message: `New KŌIN user signed up.\nName: ${name}\nEmail: ${email}\nDate: ${new Date().toLocaleString()}`
-      })
-    });
+    const C = calc();
+    const firstName = name.split(' ')[0];
+    const result = await emailjs.send(
+      EMAILJS_SERVICE_ID,
+      EMAILJS_TEMPLATE_ID,
+      {
+        to_email:    email,
+        to_name:     firstName,
+        koin_score:  C.sc,
+        currency:    S.p.currency,
+        city:        S.p.city || 'your city',
+        reply_to:    'hello@koin.app',   // change to your support email
+      }
+    );
+    if (result.status === 200) {
+      console.log('KOIN: Welcome email sent to', email);
+    }
   } catch(e) {
-    // Silent fail — email submission is non-critical
-    console.log('Email submit skipped:', e.message);
+    // Silent fail — never block app launch over email
+    console.log('KOIN: Welcome email failed (non-critical):', e.text || e.message);
   }
 }
 
@@ -1554,7 +1589,7 @@ function launch() {
   S.launched = true;
   Vault.save(S);
   // Submit email in background (non-blocking)
-  if (p.email) submitEmailToWeb3Forms(p.email, p.name);
+  if (p.email) sendWelcomeEmail(p.email, p.name); // sends HTML welcome email via EmailJS
   showPg('pg-dash');
   renderDash();
   initChat();
