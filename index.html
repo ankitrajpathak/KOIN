@@ -17,9 +17,9 @@
     // 3. Create Email Template → paste the HTML template → copy Template ID
     // 4. Go to Account → copy Public Key
     // Then replace the three values below:
-    const EMAILJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';   // from Account tab
-    const EMAILJS_SERVICE_ID  = 'YOUR_SERVICE_ID';   // from Email Services tab
-    const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';  // from Email Templates tab
+    const EMAILJS_PUBLIC_KEY  = 'ntsb5pIJLrXBDEdSY';   // from Account tab
+    const EMAILJS_SERVICE_ID  = 'service_tcbazt3';   // from Email Services tab
+    const EMAILJS_TEMPLATE_ID = 'template_xwjouqw';  // from Email Templates tab
 
     // Template variables available in your EmailJS template:
     //   {{to_email}}   — user's email address
@@ -29,7 +29,7 @@
     //   {{city}}       — their city
 
     document.addEventListener('DOMContentLoaded', () => {
-      if (EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
+      if (EMAILJS_PUBLIC_KEY !== 'ntsb5pIJLrXBDEdSY') {
         emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
         console.log('KOIN: EmailJS initialised');
       }
@@ -1547,7 +1547,7 @@ function showInfo(k) {
 
 // ── LAUNCH ──
 async function sendWelcomeEmail(email, name) {
-  if (!email || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+  if (!email || EMAILJS_PUBLIC_KEY === 'ntsb5pIJLrXBDEdSY') {
     // EmailJS not configured — skip silently
     console.log('KOIN: EmailJS not configured. Add your keys to send welcome emails.');
     return;
