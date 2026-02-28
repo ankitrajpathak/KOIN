@@ -1518,6 +1518,29 @@ function showInfo(k) {
 }
 
 // ── LAUNCH ──
+async function submitEmailToWeb3Forms(email, name) {
+  if (!email) return;
+  try {
+    // Web3Forms — free email service, no server needed.
+    // Replace ACCESS_KEY below with your key from https://web3forms.com
+    // Emails land directly in your inbox.
+    await fetch('https://api.web3forms.com/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        access_key: 'YOUR_WEB3FORMS_ACCESS_KEY', // ← replace this
+        subject: 'New KŌIN User: ' + name,
+        from_name: 'KŌIN App',
+        email: email,
+        message: `New KŌIN user signed up.\nName: ${name}\nEmail: ${email}\nDate: ${new Date().toLocaleString()}`
+      })
+    });
+  } catch(e) {
+    // Silent fail — email submission is non-critical
+    console.log('Email submit skipped:', e.message);
+  }
+}
+
 function launch() {
   const p = S.p;
   p.email = $('femail')?.value?.trim() || '';
@@ -1530,6 +1553,8 @@ function launch() {
   if (!p.goals) p.goals = [];
   S.launched = true;
   Vault.save(S);
+  // Submit email in background (non-blocking)
+  if (p.email) submitEmailToWeb3Forms(p.email, p.name);
   showPg('pg-dash');
   renderDash();
   initChat();
@@ -2087,18 +2112,52 @@ Goals: ${p.goals.map(g => g.name + ' ' + FMT(g.amt) + ' in ' + g.mo + 'mo').join
 Health insurance: ${p.inv.hi > 0 ? 'yes' : 'NO — flag this'} | Term life insurance: ${p.inv.ti > 0 ? 'yes' : 'NO'}
 Always use ${p.currency}. Keep responses under 5 sentences for simple questions.`;
   try {
-    const msgs = S.chat.map(m => ({role: m.r === 'ai' ? 'assistant' : 'user', content: m.t.replace(/<[^>]*>/g, '')}));
+    // Build clean message history — skip first AI greeting (local only).
+    // Strip HTML, enforce strict user/assistant alternation required by Anthropic API.
+    const rawMsgs = S.chat.slice(1); // skip the local greeting
+    const cleanMsgs = [];
+    for (const m of rawMsgs) {
+      const role = m.r === 'ai' ? 'assistant' : 'user';
+      const content = m.t.replace(/<[^>]*>/g, '').replace(/\*\*(.*?)\*\*/g, '$1').trim();
+      if (!content) continue;
+      if (cleanMsgs.length > 0 && cleanMsgs[cleanMsgs.length - 1].role === role) {
+        cleanMsgs[cleanMsgs.length - 1].content += '\n' + content;
+      } else {
+        cleanMsgs.push({ role, content });
+      }
+    }
+    // Must end with the current user message
+    if (cleanMsgs.length === 0 || cleanMsgs[cleanMsgs.length - 1].role !== 'user') {
+      cleanMsgs.push({ role: 'user', content: txt });
+    }
+
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:1000, system:sys, messages:msgs})
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-dangerous-direct-browser-calls': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: sys,
+        messages: cleanMsgs
+      })
     });
     const data = await res.json();
+    if (data.error) throw new Error(data.error.message || 'API error');
     const reply = data.content?.[0]?.text || 'Something went wrong — try again.';
-    rmTyping(); S.chat.push({r:'ai', t:reply}); renderChat();
+    rmTyping();
+    S.chat.push({ r: 'ai', t: reply });
+    renderChat();
   } catch(e) {
     rmTyping();
-    S.chat.push({r:'ai', t:`Safe to spend: **${FMT(C.csp)}**. Savings rate: **${C.sr}%**. Score: **${C.sc}/1000**.${!p.inv.hi ? ' 🚨 No health insurance — priority #1' : ''}`});
+    console.error('KOIN AI error:', e.message);
+    const isAuthErr = e.message && (e.message.includes('key') || e.message.includes('auth') || e.message.includes('401'));
+    const fallback = isAuthErr
+      ? '🔑 The AI needs an API key to work. In claude.ai this is handled automatically — if you are self-hosting, add your Anthropic API key to the fetch headers.'
+      : `Here is your current snapshot:\n\n**Safe to spend:** ${FMT(C.csp)}/mo\n**Savings rate:** ${C.sr}%${C.sr >= 20 ? ' ✅' : ' ⚠️ below 20% target'}\n**KŌIN Score:** ${C.sc}/1000${!p.inv.hi ? '\n\n🚨 **No health insurance** — your #1 financial risk.' : ''}\n\n*(AI connection unavailable — showing local data)*`;
+    S.chat.push({ r: 'ai', t: fallback });
     renderChat();
   }
 }
@@ -2216,5 +2275,4 @@ fetchRates().then(() => {
 renderCurGrid(null, 'cur-ob-grid');
 </script>
 </body>
-
 </html>
